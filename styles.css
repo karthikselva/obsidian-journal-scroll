@@ -1,0 +1,60 @@
+.journal-scroll-view {
+  position: relative;
+  padding: 0 var(--size-4-6, 24px) var(--size-4-12, 48px);
+}
+
+.journal-scroll-list {
+  max-width: var(--file-line-width, 700px);
+  margin: 0 auto;
+}
+
+.journal-scroll-status {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  padding: var(--size-4-4, 16px) 0;
+}
+
+.journal-scroll-entry {
+  padding-bottom: var(--size-4-8, 32px);
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: var(--size-4-4, 16px);
+}
+
+.journal-scroll-entry.is-today .journal-scroll-date {
+  color: var(--text-accent);
+}
+
+.journal-scroll-date {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--background-primary);
+  padding: var(--size-4-3, 12px) 0 var(--size-4-2, 8px);
+  margin: 0;
+  font-size: var(--h3-size, 1.2em);
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-4-2, 8px);
+}
+
+.journal-scroll-date:hover {
+  color: var(--text-accent);
+}
+
+.journal-scroll-weekday {
+  color: var(--text-muted);
+  font-weight: normal;
+  font-size: 0.8em;
+}
+
+.journal-scroll-body img {
+  max-width: 100%;
+  border-radius: var(--radius-s, 4px);
+}
+
+/* Read-only: task checkboxes are display only */
+.journal-scroll-body input[type="checkbox"] {
+  pointer-events: none;
+}
