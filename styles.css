@@ -76,8 +76,7 @@
 /* ---------------- Body ---------------- */
 
 /* Images are small square thumbnails; click opens the lightbox. */
-.journal-scroll-body .internal-embed.image-embed,
-.journal-scroll-body .internal-embed.media-embed:has(img) {
+.journal-scroll-body .internal-embed.image-embed {
   display: inline-block;
   width: auto;
   margin: 0;
@@ -217,9 +216,17 @@
   column-gap: var(--journal-page-gap, 32px);
   transform: translateX(var(--journal-book-x, 0px));
   column-fill: auto;
-  column-rule: 1px solid var(--background-modifier-border);
   transition: transform 200ms ease-out;
   will-change: transform;
+}
+
+/* Divider down the middle of a two-page spread (the gap centre is at 50%). */
+.is-book.is-spread .journal-scroll-viewport {
+  background: linear-gradient(to right,
+    transparent calc(50% - 0.5px),
+    var(--background-modifier-border) calc(50% - 0.5px),
+    var(--background-modifier-border) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px));
 }
 
 .is-book .journal-scroll-list.is-instant {
@@ -233,17 +240,12 @@
   border: 0;
 }
 
-.is-book .journal-scroll-entry:first-child {
-  break-before: auto;
-}
-
 /* In a book the date opens the page like a chapter heading, not a sticky bar. */
 .is-book .journal-scroll-date {
   position: static;
   margin: 0 0 var(--size-4-4, 16px);
   border-radius: var(--radius-m, 8px);
   box-shadow: none;
-  break-after: avoid;
 }
 
 .is-book .journal-scroll-body {
@@ -258,7 +260,6 @@
   max-height: calc(var(--journal-page-height, 600px) * 0.8);
   width: auto;
   object-fit: contain;
-  break-inside: avoid;
 }
 
 .is-book .journal-book-nav {

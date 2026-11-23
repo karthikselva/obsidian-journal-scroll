@@ -624,6 +624,7 @@ class JournalScrollView extends ItemView {
     this.book = { n, G, W, H, colStride: colW + G };
     if (prev && prev.W === W && prev.H === H && prev.n === n) return true;
 
+    this.contentEl.toggleClass("is-spread", n === 2);
     // Geometry lives in CSS variables; the .is-book rules in styles.css consume them.
     setCssVars(this.contentEl, {
       "--journal-page-width": `${W}px`,
