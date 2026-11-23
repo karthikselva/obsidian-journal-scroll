@@ -1,0 +1,50 @@
+# Journal Scroll — Obsidian plugin
+
+Makes a daily journal read like a book: every `DD-MM-YYYY - Journal.md` entry is shown on one continuous, read-only page, opened at today, instead of one Markdown file at a time. More features will be added; keep this file current when they are.
+
+## Layout and tooling
+
+- **Plain CommonJS, no build step, no package.json.** `main.js` is the shipped file. Only `require("obsidian")`; no npm deps.
+- Files: `main.js` (all logic), `styles.css`, `manifest.json` (id `journal-scroll`, minAppVersion 1.4.0, `isDesktopOnly: false`), `versions.json` (plugin version → min app version), `README.md`, `LICENSE`.
+- Distributed via BRAT (`karthikselva/obsidian-journal-scroll`) or by copying `manifest.json`, `main.js`, `styles.css` into `<vault>/.obsidian/plugins/journal-scroll/`. Releases need those three files attached.
+- When bumping the version: update `manifest.json` and add the entry to `versions.json`.
+- Must work on mobile — avoid Node/Electron APIs (`fs`, `path`, `require` of anything but `obsidian`).
+- No tests. Verify by loading the plugin in a real vault.
+
+## Journal convention
+
+`<journal dir>/<YYYY>/<MM> (<Mon>) <YYYY>/<DD>-<MM>-<YYYY> - Journal.md`, default dir `01 - Projects/Daily Journal`.
+- The **filename date** drives ordering (`NAME_RE = /^(\d{2})-(\d{2})-(\d{4})\b/`), so folder nesting can vary; the directory is searched recursively.
+- `parseDate` rejects rollovers (e.g. `13-13-2024`, `31-02-2025`). An invalid name falls back to day-from-filename + month/year from the parent `MM (Mon) YYYY` folder.
+- Many entries begin with a `---` section rule that isn't frontmatter. `renderBody` strips only real parsed frontmatter (via `metadataCache`), otherwise prepends `\n` so the rule renders as an `<hr>`.
+
+## Architecture (`main.js`)
+
+- **`JournalScrollPlugin`** — loads settings, registers the view (`VIEW_TYPE = "journal-scroll-view"`) and hover-link source, ribbon icon `book-open`, commands `open` ("Open journal (scrolled to today)") and `open-choose-dir`, and the settings tab. `open()` opens the saved `journalDir` directly and prompts only if it's missing or not a folder (the `askOnOpen` setting was retired and is deleted from loaded data). `applyJournalDir()` rebuilds open views when the settings field is committed. `openDir` saves the chosen dir and reuses an existing Journal Scroll leaf or opens a new tab.
+- **`FolderPromptModal`** (`SuggestModal`) — fuzzy-ish folder picker over all vault folders, prefilled with the last dir.
+- **`JournalScrollView`** (`ItemView`) — the reader. Two modes, `MODE_SCROLL` / `MODE_BOOK`, from the global setting `viewMode` (`plugin.setViewMode` saves it and calls `view.setMode` on every open view; toolbar action, command `toggle-view-mode` and settings dropdown all go through it). `setMode` rebuilds focused on `currentPath()` so switching keeps your place.
+  - DOM: `contentEl.journal-scroll-view` (`.is-book` in book mode) > `statusEl`, `stageEl` > `viewportEl` > `listEl` (entries), `navEl` (book prev/label/next).
+  - State is `{ dir }` (`getState`/`setState`), so the view survives workspace reloads.
+  - `build(dir, focusPath?)`: collects entries (oldest first), picks the target = `focusPath`, else today or latest entry ≤ today, resets layout, then `buildScroll` or `buildBook`. `firstLoaded`/`lastLoaded` bound the rendered window in both modes.
+  - `buildId` guards against stale async renders; every async path checks `id !== this.buildId`.
+  - **Scroll mode:** renders `[target-batch+1, target+batch]`, scrolls so the *bottom* of today is at the viewport bottom (or the *top* of the focused entry after a mode switch, `alignTop`). `pinned` + `ResizeObserver` re-scroll while images load; unpinned after 4 s or on user input. `onScroll` lazy-loads both ways within 600px of either edge: `loadOlder` (prepend, preserves position by anchoring the old first entry) and `loadNewer` (append).
+  - **Book mode:** `listEl` is a CSS multi-column box with a fixed page height; overflow columns run to the right and a spread is shown by `translateX(-spread * (W + G))`. `layoutBook()` measures `stageEl` → page geometry in `this.book` (`n` = 2 pages when pane ≥ 1100px, gap `G`, width `W` capped at 680px/page, `colStride`). Each entry has `break-before: column`. Position is held as `anchor = { path, offset }` (entry + page within it); `relayout()` re-derives the spread from it after any layout change (ResizeObserver, image `load` capture, MutationObserver, batch prepend), so nothing jumps. `entrySpan(el)` maps an entry's bounding rect to its column range. `maybeLoadMore` preloads a batch when within 1 spread of either end; `turn(±1)` waits for/forces loads at the edges. Input: arrow keys / PageUp/Down / Space (keydown on `contentEl`, which has `tabIndex=0`), wheel (one turn per gesture, 300 ms quiet), swipe, nav buttons.
+  - Markdown rendered with `MarkdownRenderer.render` (fallback `renderMarkdown`) into a child `Component` (`renderScope`) that's torn down on rebuild/close.
+  - Images: `groupThumbnails(body)` turns image-only `<p>`s into `.journal-thumb-row` groups and lifts images out of mixed text paragraphs into a group inserted before them (cleaning leftover `<br>`s), merging adjacent groups. CSS forces 80×80 `object-fit: cover` thumbnails; groups `float: right; clear: right`, max `min(45%, 258px)` (3 thumbs), so text wraps beside them; `.journal-scroll-body::after` clears floats per entry. Clicking any body `img` opens `ImageLightbox` (a `Modal`) with all images of that entry: arrow keys / swipe / buttons, click image to close, "Open in new tab" for vault embeds (via the embed's `src` linktext).
+  - Read-only: checkboxes disabled; clicks on `a.internal-link` open via `workspace.openLinkText` in a new tab (mod-click respected); hover triggers `hover-link` for page preview. Clicking a date heading opens that note for editing.
+  - `vault.on("modify")` re-renders only already-rendered entries. New/deleted files are **not** picked up until rebuild ("Jump to today" toolbar action rebuilds).
+  - Toolbar actions: change directory (`folder-open`), jump to today (`calendar-check`).
+  - Status line at top: "Scroll up for older entries · X of N loaded" or "Beginning of journal · <date> · N entries".
+- **`JournalScrollSettingTab`** — `viewMode` (dropdown, default scroll), `journalDir` (text; applied to open views on blur/Enter), `batchSize` (slider 3–50, default 10).
+
+## Styling (`styles.css`)
+
+Uses Obsidian CSS variables only (theme-friendly; `color-mix` for tints). Key classes: `.journal-scroll-view`, `-list` (centered at `--file-line-width`), `-status`, `-entry` (divider between days), `-date` (sticky accent-tinted band with accent bottom border; `.is-today` fills it with `--interactive-accent`), `-weekday`, `-body` (images max-width 100%, checkboxes `pointer-events: none`). Book-mode rules are under `.is-book` plus `.journal-book-nav/-label/-btn`; images are capped at 80% of `--journal-page-height` (set by `layoutBook`).
+- The view's padding rule uses `.workspace-leaf-content[data-type="journal-scroll-view"] .view-content.journal-scroll-view` to out-rank Obsidian's `.view-content` padding — top padding there caused a gap above the sticky date (sticky sticks inside the scroll container's padding).
+
+## Known limitations / ideas for future work
+
+- No live add/delete handling (only `modify`).
+- Book mode needs manual testing in Obsidian on desktop + mobile after changes (multicol measurement via `getBoundingClientRect`).
+- No date navigation/jump-to-date, search, or outline of days.
+- Entries render sequentially (awaited one by one), so large batches are slow.

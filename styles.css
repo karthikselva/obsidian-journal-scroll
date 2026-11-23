@@ -1,6 +1,12 @@
-.journal-scroll-view {
+/*
+ * Obsidian gives every .view-content top padding, and a sticky element sticks
+ * inside its scroll container's padding — that was the gap above the pinned
+ * date. The attribute selector out-ranks Obsidian's own rule.
+ */
+.workspace-leaf-content[data-type="journal-scroll-view"] .view-content.journal-scroll-view {
   position: relative;
   padding: 0 var(--size-4-6, 24px) var(--size-4-12, 48px);
+  outline: none;
 }
 
 .journal-scroll-list {
@@ -16,45 +22,276 @@
 }
 
 .journal-scroll-entry {
-  padding-bottom: var(--size-4-8, 32px);
+  padding-bottom: var(--size-4-5, 20px);
   border-bottom: 1px solid var(--background-modifier-border);
   margin-bottom: var(--size-4-4, 16px);
 }
 
-.journal-scroll-entry.is-today .journal-scroll-date {
-  color: var(--text-accent);
-}
+/* ---------------- Date heading ---------------- */
 
 .journal-scroll-date {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--background-primary);
-  padding: var(--size-4-3, 12px) 0 var(--size-4-2, 8px);
-  margin: 0;
-  font-size: var(--h3-size, 1.2em);
-  cursor: pointer;
   display: flex;
   align-items: baseline;
-  gap: var(--size-4-2, 8px);
+  gap: var(--size-4-3, 12px);
+  margin: 0 calc(-1 * var(--size-4-4, 16px)) var(--size-4-3, 12px);
+  padding: var(--size-4-3, 12px) var(--size-4-4, 16px);
+  font-size: 1.45em;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-secondary));
+  border-bottom: 2px solid var(--interactive-accent);
+  border-radius: 0 0 var(--radius-m, 8px) var(--radius-m, 8px);
+  box-shadow: 0 3px 8px -4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
 }
 
 .journal-scroll-date:hover {
-  color: var(--text-accent);
+  color: var(--text-accent-hover, var(--text-accent));
+  background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-secondary));
 }
 
 .journal-scroll-weekday {
   color: var(--text-muted);
-  font-weight: normal;
-  font-size: 0.8em;
+  font-weight: 500;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.journal-scroll-entry.is-today .journal-scroll-date {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-bottom-color: var(--interactive-accent-hover, var(--interactive-accent));
+}
+
+.journal-scroll-entry.is-today .journal-scroll-weekday {
+  color: var(--text-on-accent);
+  opacity: 0.85;
+}
+
+/* ---------------- Body ---------------- */
+
+/* Images are small square thumbnails; click opens the lightbox. */
+.journal-scroll-body .internal-embed.image-embed,
+.journal-scroll-body .internal-embed.media-embed:has(img) {
+  display: inline-block;
+  width: auto;
+  margin: 0;
 }
 
 .journal-scroll-body img {
-  max-width: 100%;
+  display: inline-block;
+  width: 80px;
+  height: 80px;
+  max-width: none;
+  object-fit: cover;
   border-radius: var(--radius-s, 4px);
+  border: 1px solid var(--background-modifier-border);
+  vertical-align: top;
+  cursor: zoom-in;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.journal-scroll-body img:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/*
+ * Photo groups float to the right, up to three thumbnails wide, and text wraps
+ * around them. Successive groups stack down the right edge (clear: right).
+ */
+.journal-scroll-body .journal-thumb-row {
+  float: right;
+  clear: right;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: min(45%, 258px);
+  margin: 4px 0 8px 14px;
+}
+
+/* Keep each day's photos inside its own entry. */
+.journal-scroll-body::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+/* Compact text rhythm */
+.journal-scroll-body p {
+  margin-block: 0.45em;
+}
+
+.journal-scroll-body > :first-child,
+.journal-scroll-body > div:first-child > :first-child {
+  margin-top: 0;
+}
+
+.journal-scroll-body hr {
+  margin-block: 0.75em;
+}
+
+/* ---------------- Lightbox ---------------- */
+
+.modal.journal-scroll-lightbox {
+  width: auto;
+  max-width: 96vw;
+  max-height: 96vh;
+  padding: var(--size-4-3, 12px);
+}
+
+.journal-scroll-lightbox .modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-4-2, 8px);
+}
+
+.journal-lightbox-img {
+  display: block;
+  max-width: 92vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: var(--radius-s, 4px);
+  cursor: zoom-out;
+}
+
+.journal-lightbox-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-3, 12px);
+}
+
+.journal-lightbox-count {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
 }
 
 /* Read-only: task checkboxes are display only */
 .journal-scroll-body input[type="checkbox"] {
   pointer-events: none;
+}
+
+/* ---------------- Book mode ---------------- */
+
+.journal-book-nav {
+  display: none;
+}
+
+.workspace-leaf-content[data-type="journal-scroll-view"] .view-content.journal-scroll-view.is-book {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.is-book .journal-scroll-status {
+  display: none;
+}
+
+.is-book .journal-scroll-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.is-book .journal-scroll-viewport {
+  overflow: hidden;
+  width: var(--journal-page-width);
+  height: var(--journal-page-height);
+  margin: var(--journal-page-pad-y) auto;
+}
+
+.is-book .journal-scroll-list {
+  max-width: none;
+  margin: 0;
+  width: var(--journal-page-width);
+  height: var(--journal-page-height);
+  column-count: var(--journal-page-cols, 1);
+  column-gap: var(--journal-page-gap, 32px);
+  transform: translateX(var(--journal-book-x, 0px));
+  column-fill: auto;
+  column-rule: 1px solid var(--background-modifier-border);
+  transition: transform 200ms ease-out;
+  will-change: transform;
+}
+
+.is-book .journal-scroll-list.is-instant {
+  transition: none;
+}
+
+.is-book .journal-scroll-entry {
+  break-before: column;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.is-book .journal-scroll-entry:first-child {
+  break-before: auto;
+}
+
+/* In a book the date opens the page like a chapter heading, not a sticky bar. */
+.is-book .journal-scroll-date {
+  position: static;
+  margin: 0 0 var(--size-4-4, 16px);
+  border-radius: var(--radius-m, 8px);
+  box-shadow: none;
+  break-after: avoid;
+}
+
+.is-book .journal-scroll-body {
+  overflow-wrap: anywhere;
+}
+
+.is-book .journal-scroll-body pre {
+  white-space: pre-wrap;
+}
+
+.is-book .journal-scroll-body video {
+  max-height: calc(var(--journal-page-height, 600px) * 0.8);
+  width: auto;
+  object-fit: contain;
+  break-inside: avoid;
+}
+
+.is-book .journal-book-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-4-4, 16px);
+  flex: 0 0 auto;
+  padding: var(--size-4-2, 8px) var(--size-4-4, 16px);
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.journal-book-label {
+  min-width: 0;
+  flex: 0 1 auto;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.journal-book-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-4-1, 4px) var(--size-4-3, 12px);
+}
+
+.journal-book-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
