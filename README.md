@@ -1,5 +1,7 @@
 # Journal Scroll
 
+[![Add to Obsidian](https://img.shields.io/badge/Add_to-Obsidian-7C3AED?style=for-the-badge&logo=obsidian&logoColor=white)](https://community.obsidian.md/plugins/journal-scroll)
+
 An Obsidian plugin that shows all your daily journal entries on one continuous, read-only page. It opens at today's entry.
 
 - Asks once which folder holds your journal (searched recursively), then always opens straight into it. Change the folder later in settings or with the folder button in the view.
@@ -14,9 +16,11 @@ An Obsidian plugin that shows all your daily journal entries on one continuous, 
 
 ## Install
 
-**BRAT (desktop or mobile):** install *Obsidian42 - BRAT*, choose *Add a beta plugin*, enter `karthikselva/obsidian-journal-scroll`, then enable *Journal Scroll*.
+**From Obsidian (recommended):** open *Settings → Community plugins → Browse*, search for **Journal Scroll**, then choose *Install* and *Enable*. Or open the [Journal Scroll page](https://community.obsidian.md/plugins/journal-scroll) in the Obsidian Community directory and click **Add to Obsidian**.
 
-**Manual:** copy `manifest.json`, `main.js` and `styles.css` from the latest release into `<vault>/.obsidian/plugins/journal-scroll/`.
+**Beta builds with BRAT:** install *Obsidian42 - BRAT*, choose *Add a beta plugin*, enter `karthikselva/obsidian-journal-scroll`, then enable *Journal Scroll*. BRAT tracks the latest GitHub release, which can be ahead of the directory.
+
+**Manual:** copy `manifest.json`, `main.js` and `styles.css` from the [latest release](https://github.com/karthikselva/obsidian-journal-scroll/releases/latest) into `<vault>/.obsidian/plugins/journal-scroll/`, then enable *Journal Scroll* under *Settings → Community plugins*.
 
 ## Use
 
