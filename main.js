@@ -404,16 +404,18 @@ class JournalScrollView extends ItemView {
     wrap.dataset.path = file.path;
     if (dayKey(date) === dayKey(new Date())) wrap.addClass("is-today");
 
-    const summary = wrap.createDiv({ cls: "journal-scroll-summary" });
-    this.renderSummary(file, summary);
-
     const h = wrap.createEl("h2", { cls: "journal-scroll-date" });
     h.createSpan({ cls: "journal-scroll-day", text: fmtDate(date) });
     h.createSpan({ cls: "journal-scroll-weekday", text: WEEKDAYS[date.getDay()] });
+    h.createSpan({ cls: "journal-scroll-heading-title" });
     h.setAttr("aria-label", `Open ${file.basename}`);
     h.addEventListener("click", (evt) => {
       this.app.workspace.getLeaf(Keymap.isModEvent(evt) || "tab").openFile(file);
     });
+
+    // Highlights sit between the date bar and the entry, as a short summary of the day.
+    wrap.createDiv({ cls: "journal-scroll-summary" });
+    this.renderSummary(file, wrap);
 
     const body = wrap.createDiv({ cls: "journal-scroll-body markdown-rendered" });
     await this.renderBody(file, body);
@@ -512,19 +514,27 @@ class JournalScrollView extends ItemView {
    * Title and highlights from the entry's frontmatter (`title`, `highlights`),
    * shown above the date heading. Written by hand or by Journal Scroll Assistant.
    */
-  renderSummary(file, el) {
-    el.empty();
+  renderSummary(file, wrap) {
+    const titleEl = wrap.querySelector(".journal-scroll-heading-title");
+    const el = wrap.querySelector(".journal-scroll-summary");
+    if (!titleEl || !el) return;
     const cache = this.app.metadataCache.getFileCache(file);
     const fm = (cache && cache.frontmatter) || {};
-    const title = typeof fm.title === "string" ? fm.title.trim() : "";
+    const on = this.plugin.settings.showSummary;
+    const title = on && typeof fm.title === "string" ? fm.title.trim() : "";
     let highlights = fm.highlights;
     if (typeof highlights === "string") highlights = [highlights];
-    highlights = Array.isArray(highlights)
+    highlights = on && Array.isArray(highlights)
       ? highlights.filter((h) => typeof h === "string" && h.trim()) : [];
-    const show = this.plugin.settings.showSummary && (title || highlights.length);
-    el.toggleClass("is-hidden", !show);
-    if (!show) return;
-    if (title) el.createDiv({ cls: "journal-scroll-title", text: title });
+
+    // Title shares the date bar: "22 Nov 2026  SUNDAY  Title of the day".
+    titleEl.setText(title);
+    titleEl.toggleClass("is-hidden", !title);
+    if (title) titleEl.setAttr("aria-label", title);
+    else titleEl.removeAttribute("aria-label");
+
+    el.empty();
+    el.toggleClass("is-hidden", !highlights.length);
     if (highlights.length) {
       const ul = el.createEl("ul", { cls: "journal-scroll-highlights" });
       for (const h of highlights) ul.createEl("li", { text: h.trim() });
@@ -535,8 +545,7 @@ class JournalScrollView extends ItemView {
     if (!(file instanceof TFile) || !this.listEl) return;
     const wrap = Array.from(this.listEl.children).find((c) => c.dataset.path === file.path);
     if (!wrap) return;
-    const summary = wrap.querySelector(".journal-scroll-summary");
-    if (summary) this.renderSummary(file, summary);
+    this.renderSummary(file, wrap);
     // The body render on "modify" may have used stale frontmatter bounds.
     const body = wrap.querySelector(".journal-scroll-body");
     if (body) await this.renderBody(file, body);
@@ -546,8 +555,7 @@ class JournalScrollView extends ItemView {
     if (!this.listEl) return;
     for (const wrap of Array.from(this.listEl.children)) {
       const file = this.app.vault.getAbstractFileByPath(wrap.dataset.path || "");
-      const summary = wrap.querySelector(".journal-scroll-summary");
-      if (file instanceof TFile && summary) this.renderSummary(file, summary);
+      if (file instanceof TFile) this.renderSummary(file, wrap);
     }
   }
 
