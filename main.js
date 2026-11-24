@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS = {
   showHeatmap: true,
   showSummary: true,
   foldEntries: false,  // scroll mode: start each entry folded to its date bar
+  showFocus: true,     // life-area tags (frontmatter focus:) on the right of the date bar
 };
 
 function parseDate(name) {
@@ -430,6 +431,7 @@ class JournalScrollView extends ItemView {
     h.createSpan({ cls: "journal-scroll-day", text: fmtDate(date) });
     h.createSpan({ cls: "journal-scroll-weekday", text: WEEKDAYS[date.getDay()] });
     h.createSpan({ cls: "journal-scroll-heading-title" });
+    h.createSpan({ cls: "journal-scroll-focus" });
     const open = h.createSpan({ cls: "journal-scroll-open", attr: { "aria-label": `Open ${file.basename}` } });
     setIcon(open, "file-text");
     const openNote = (evt) => this.app.workspace.getLeaf(Keymap.isModEvent(evt) || "tab").openFile(file);
@@ -585,6 +587,7 @@ class JournalScrollView extends ItemView {
    * shown above the date heading. Written by hand or by Journal Scroll Assistant.
    */
   renderSummary(file, wrap) {
+    this.renderFocus(file, wrap);
     const titleEl = wrap.querySelector(".journal-scroll-heading-title");
     const el = wrap.querySelector(".journal-scroll-summary");
     if (!titleEl || !el) return;
@@ -608,6 +611,27 @@ class JournalScrollView extends ItemView {
     if (highlights.length) {
       const ul = el.createEl("ul", { cls: "journal-scroll-highlights" });
       for (const h of highlights) ul.createEl("li", { text: h.trim() });
+    }
+  }
+
+  /**
+   * Life-area tags from frontmatter `focus:` (area -> focused | some | neglected), shown on the
+   * right of the date bar: green, yellow, red. Written by Journal Scroll Assistant.
+   */
+  renderFocus(file, wrap) {
+    const el = wrap.querySelector(".journal-scroll-focus");
+    if (!el) return;
+    el.empty();
+    const cache = this.app.metadataCache.getFileCache(file);
+    const focus = cache && cache.frontmatter && cache.frontmatter.focus;
+    const LEVELS = { focused: "green", some: "yellow", neglected: "red" };
+    const items = this.plugin.settings.showFocus && focus && typeof focus === "object" && !Array.isArray(focus)
+      ? Object.entries(focus).filter(([area, level]) => area && LEVELS[String(level).toLowerCase()]) : [];
+    el.toggleClass("is-hidden", !items.length);
+    for (const [area, level] of items) {
+      const lv = String(level).toLowerCase();
+      const tag = el.createSpan({ cls: `journal-scroll-focus-tag is-${LEVELS[lv]}`, text: area });
+      tag.setAttr("aria-label", `${area}: ${lv}`);
     }
   }
 
@@ -1186,6 +1210,18 @@ class JournalScrollSettingTab extends PluginSettingTab {
       .addToggle((t) => t
         .setValue(this.plugin.settings.showHeatmap)
         .onChange((v) => this.plugin.setShowHeatmap(v)));
+
+    new Setting(containerEl)
+      .setName("Show life-area tags")
+      .setDesc("Coloured tags on the right of each date bar from the note's focus: frontmatter: green for "
+        + "focused, yellow for some, red for neglected. Journal Scroll Assistant writes them.")
+      .addToggle((t) => t
+        .setValue(this.plugin.settings.showFocus)
+        .onChange(async (v) => {
+          this.plugin.settings.showFocus = v;
+          await this.plugin.saveSettings();
+          this.plugin.refreshSummaries();
+        }));
 
     new Setting(containerEl)
       .setName("Entries start")

@@ -606,3 +606,62 @@
   width: 14px;
   height: 14px;
 }
+
+/* ---------------- Life-area tags on the date bar ---------------- */
+
+/* Right side of the first row: date · weekday ......... [Family] [Career] (note icon) */
+.journal-scroll-focus {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-self: center;
+  gap: 4px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.journal-scroll-focus.is-hidden {
+  display: none;
+}
+
+/* With tags present they take the free space; the note icon sits right after them. */
+.journal-scroll-focus:not(.is-hidden) + .journal-scroll-open {
+  margin-left: 4px;
+}
+
+.journal-scroll-focus-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 6px;
+  font-size: var(--font-ui-smaller, 12px);
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  border: 1px solid var(--tag-color);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.journal-scroll-focus-tag::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tag-color);
+}
+
+.journal-scroll-focus-tag.is-green {
+  --tag-color: var(--color-green, #2ea043);
+}
+
+.journal-scroll-focus-tag.is-yellow {
+  --tag-color: var(--color-yellow, #d29922);
+}
+
+.journal-scroll-focus-tag.is-red {
+  --tag-color: var(--color-red, #e5534b);
+}
