@@ -632,8 +632,8 @@
 .journal-scroll-focus-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 7px 1px 6px;
+  gap: 5px;
+  padding: 1px 7px;
   font-size: var(--font-ui-smaller, 12px);
   font-weight: 600;
   line-height: 1.5;
@@ -641,16 +641,29 @@
   text-transform: none;
   color: var(--text-normal);
   background: var(--background-primary);
-  border: 1px solid var(--tag-color);
-  border-radius: 999px;
+  border-radius: var(--radius-s, 4px);
   white-space: nowrap;
 }
 
-.journal-scroll-focus-tag::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+/* Signal meter: three rising bars, lit in the level's colour, the rest grey. */
+.journal-scroll-meter {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 11px;
+}
+
+.journal-scroll-meter > span {
+  width: 3px;
+  border-radius: 1px;
+  background: var(--background-modifier-border-hover, var(--background-modifier-border));
+}
+
+.journal-scroll-meter > span:nth-child(1) { height: 4px; }
+.journal-scroll-meter > span:nth-child(2) { height: 7.5px; }
+.journal-scroll-meter > span:nth-child(3) { height: 11px; }
+
+.journal-scroll-meter > span.is-on {
   background: var(--tag-color);
 }
 
