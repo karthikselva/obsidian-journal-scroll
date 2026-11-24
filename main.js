@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS = {
   viewMode: MODE_SCROLL,
   showHeatmap: true,
   showSummary: true,
+  foldEntries: false,  // scroll mode: start each entry folded to its date bar
 };
 
 function parseDate(name) {
@@ -190,6 +191,7 @@ class JournalScrollView extends ItemView {
     this.pinned = false;    // keep the target in view while images load
     this.targetEl = null;
     this.alignTop = false;  // show the target's top (mode switch) rather than its end (today)
+    this.foldOverrides = new Map(); // path -> folded, for entries toggled away from the default
 
     // Book mode
     this.book = null;       // page geometry, see layoutBook()
@@ -240,6 +242,11 @@ class JournalScrollView extends ItemView {
     this.addAction("calendar-check", "Jump to today", () => this.dir && this.build(this.dir));
     this.modeAction = this.addAction("book", "", () => this.plugin.setViewMode(
       this.mode === MODE_BOOK ? MODE_SCROLL : MODE_BOOK));
+    this.foldAction = this.addAction("fold-vertical", "", () => this.plugin.setFoldEntries(
+      !this.plugin.settings.foldEntries));
+    this.heatmapAction = this.addAction("calendar-range", "", () => this.plugin.setShowHeatmap(
+      !this.plugin.settings.showHeatmap));
+    this.updateActions();
     this.applyMode();
 
     // Scroll mode
@@ -297,9 +304,23 @@ class JournalScrollView extends ItemView {
 
   /* ---------------- mode ---------------- */
 
+  updateActions() {
+    const s = this.plugin.settings;
+    if (this.foldAction) {
+      setIcon(this.foldAction, s.foldEntries ? "unfold-vertical" : "fold-vertical");
+      this.foldAction.setAttr("aria-label", s.foldEntries ? "Expand all entries" : "Fold all entries");
+      this.foldAction.toggleClass("is-hidden", this.mode === MODE_BOOK);
+    }
+    if (this.heatmapAction) {
+      this.heatmapAction.setAttr("aria-label", s.showHeatmap ? "Hide activity heatmap" : "Show activity heatmap");
+      this.heatmapAction.toggleClass("is-active", !!s.showHeatmap);
+    }
+  }
+
   applyMode() {
     const book = this.mode === MODE_BOOK;
     this.contentEl.toggleClass("is-book", book);
+    this.updateActions();
     if (this.modeAction) {
       setIcon(this.modeAction, book ? "scroll-text" : "book");
       this.modeAction.setAttr("aria-label", book ? "Switch to infinite scroll" : "Switch to book view");
@@ -405,12 +426,22 @@ class JournalScrollView extends ItemView {
     if (dayKey(date) === dayKey(new Date())) wrap.addClass("is-today");
 
     const h = wrap.createEl("h2", { cls: "journal-scroll-date" });
+    setIcon(h.createSpan({ cls: "journal-scroll-fold" }), "chevron-down");
     h.createSpan({ cls: "journal-scroll-day", text: fmtDate(date) });
     h.createSpan({ cls: "journal-scroll-weekday", text: WEEKDAYS[date.getDay()] });
     h.createSpan({ cls: "journal-scroll-heading-title" });
-    h.setAttr("aria-label", `Open ${file.basename}`);
+    const open = h.createSpan({ cls: "journal-scroll-open", attr: { "aria-label": `Open ${file.basename}` } });
+    setIcon(open, "file-text");
+    const openNote = (evt) => this.app.workspace.getLeaf(Keymap.isModEvent(evt) || "tab").openFile(file);
+    open.addEventListener("click", (evt) => {
+      evt.stopPropagation();
+      openNote(evt);
+    });
+    // Clicking the date bar folds or expands the entry (scroll mode). Ctrl/Cmd-click, the
+    // note button, and any click in book view open the note instead.
     h.addEventListener("click", (evt) => {
-      this.app.workspace.getLeaf(Keymap.isModEvent(evt) || "tab").openFile(file);
+      if (this.mode === MODE_BOOK || Keymap.isModEvent(evt)) openNote(evt);
+      else this.toggleFold(wrap);
     });
 
     // Highlights sit between the date bar and the entry, as a short summary of the day.
@@ -418,6 +449,7 @@ class JournalScrollView extends ItemView {
     this.renderSummary(file, wrap);
 
     const body = wrap.createDiv({ cls: "journal-scroll-body markdown-rendered" });
+    this.applyFold(wrap);
     await this.renderBody(file, body);
     return wrap;
   }
@@ -508,6 +540,44 @@ class JournalScrollView extends ItemView {
       };
     });
     new ImageLightbox(this.app, images, Math.max(0, imgs.indexOf(img))).open();
+  }
+
+  /* ---------------- folding (scroll mode) ---------------- */
+
+  isFolded(path) {
+    if (this.mode === MODE_BOOK) return false; // a book page per entry; folding would leave empty pages
+    return this.foldOverrides.has(path) ? this.foldOverrides.get(path) : !!this.plugin.settings.foldEntries;
+  }
+
+  applyFold(wrap) {
+    const folded = this.isFolded(wrap.dataset.path);
+    wrap.toggleClass("is-folded", folded);
+    const h = wrap.querySelector(".journal-scroll-date");
+    if (h && this.mode !== MODE_BOOK) h.setAttr("aria-expanded", folded ? "false" : "true");
+  }
+
+  toggleFold(wrap) {
+    const path = wrap.dataset.path;
+    const fold = !this.isFolded(path);
+    this.foldOverrides.set(path, fold);
+    this.pinned = false;
+    this.applyFold(wrap);
+    // Folding an entry whose bar was stuck at the top would jump the page; keep its bar in view.
+    if (fold && wrap.offsetTop < this.stageEl.scrollTop) this.stageEl.scrollTop = wrap.offsetTop;
+    this.onScroll(); // a shorter page may need more entries loaded
+  }
+
+  /** The default changed (settings or toolbar): reset per-entry choices and re-apply. */
+  refreshFolds() {
+    this.foldOverrides.clear();
+    this.updateActions();
+    if (!this.listEl) return;
+    const top = this.currentPath && this.mode === MODE_SCROLL ? this.currentPath() : null;
+    for (const wrap of Array.from(this.listEl.children)) this.applyFold(wrap);
+    // Keep the entry the reader was on at the top of the view.
+    const el = top && Array.from(this.listEl.children).find((c) => c.dataset.path === top);
+    if (el) this.stageEl.scrollTop = el.offsetTop;
+    this.onScroll();
   }
 
   /**
@@ -607,10 +677,17 @@ class JournalScrollView extends ItemView {
       cls: "journal-heatmap-title",
       text: `${days.size} ${days.size === 1 ? "entry" : "entries"} in the last year`,
     });
-    const legend = head.createDiv({ cls: "journal-heatmap-legend" });
+    const right = head.createDiv({ cls: "journal-heatmap-right" });
+    const legend = right.createDiv({ cls: "journal-heatmap-legend" });
     legend.createSpan({ text: "Less" });
     for (let l = 0; l <= 4; l++) legend.createSpan({ cls: `journal-heatmap-cell is-level-${l}` });
     legend.createSpan({ text: "More" });
+    const hide = right.createEl("button", {
+      cls: "journal-heatmap-hide clickable-icon",
+      attr: { "aria-label": "Hide activity heatmap (show it again from the toolbar)" },
+    });
+    setIcon(hide, "eye-off");
+    hide.addEventListener("click", () => this.plugin.setShowHeatmap(false));
 
     const body = root.createDiv({ cls: "journal-heatmap-body" });
     body.createDiv({ cls: "journal-heatmap-corner" });
@@ -671,6 +748,8 @@ class JournalScrollView extends ItemView {
 
     this.pinned = true;
     this.scrollToTarget();
+    // Folded or short entries may not fill the pane, and then no scroll event ever loads more.
+    this.onScroll();
     // Give async embeds a moment, then stop chasing layout shifts.
     window.setTimeout(() => { if (id === this.buildId) this.pinned = false; }, 4000);
   }
@@ -991,6 +1070,16 @@ class JournalScrollPlugin extends Plugin {
       name: "Toggle infinite scroll / book view",
       callback: () => this.setViewMode(this.settings.viewMode === MODE_BOOK ? MODE_SCROLL : MODE_BOOK),
     });
+    this.addCommand({
+      id: "toggle-fold-entries",
+      name: "Toggle folded / expanded entries",
+      callback: () => this.setFoldEntries(!this.settings.foldEntries),
+    });
+    this.addCommand({
+      id: "toggle-heatmap",
+      name: "Show or hide the activity heatmap",
+      callback: () => this.setShowHeatmap(!this.settings.showHeatmap),
+    });
 
     this.addSettingTab(new JournalScrollSettingTab(this.app, this));
   }
@@ -1001,7 +1090,24 @@ class JournalScrollPlugin extends Plugin {
 
   refreshHeatmaps() {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
-      if (leaf.view instanceof JournalScrollView) leaf.view.renderHeatmap();
+      if (leaf.view instanceof JournalScrollView) {
+        leaf.view.renderHeatmap();
+        leaf.view.updateActions();
+      }
+    }
+  }
+
+  async setShowHeatmap(show) {
+    this.settings.showHeatmap = show;
+    await this.saveSettings();
+    this.refreshHeatmaps();
+  }
+
+  async setFoldEntries(fold) {
+    this.settings.foldEntries = fold;
+    await this.saveSettings();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+      if (leaf.view instanceof JournalScrollView) leaf.view.refreshFolds();
     }
   }
 
@@ -1079,11 +1185,17 @@ class JournalScrollSettingTab extends PluginSettingTab {
         + "without an entry, greener for longer entries. Click a day to jump to it.")
       .addToggle((t) => t
         .setValue(this.plugin.settings.showHeatmap)
-        .onChange(async (v) => {
-          this.plugin.settings.showHeatmap = v;
-          await this.plugin.saveSettings();
-          this.plugin.refreshHeatmaps();
-        }));
+        .onChange((v) => this.plugin.setShowHeatmap(v)));
+
+    new Setting(containerEl)
+      .setName("Entries start")
+      .setDesc("Expanded shows each day in full. Folded shows only the date bar (date, day and title); "
+        + "click a bar to open that day. Also switchable from the toolbar. Book view always shows days in full.")
+      .addDropdown((d) => d
+        .addOption("expanded", "Expanded")
+        .addOption("folded", "Folded")
+        .setValue(this.plugin.settings.foldEntries ? "folded" : "expanded")
+        .onChange((v) => this.plugin.setFoldEntries(v === "folded")));
 
     new Setting(containerEl)
       .setName("Show titles and highlights")

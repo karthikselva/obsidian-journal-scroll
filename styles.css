@@ -493,3 +493,112 @@
 .journal-scroll-highlights li + li {
   margin-top: 2px;
 }
+
+/* ---------------- Folding (scroll mode) ---------------- */
+
+.journal-scroll-fold {
+  display: inline-flex;
+  align-self: center;
+  color: var(--text-faint);
+  transition: transform 120ms ease;
+}
+
+.journal-scroll-fold svg {
+  width: 16px;
+  height: 16px;
+}
+
+.journal-scroll-entry.is-folded .journal-scroll-fold {
+  transform: rotate(-90deg);
+}
+
+.journal-scroll-entry.is-today .journal-scroll-fold {
+  color: var(--text-on-accent);
+}
+
+.journal-scroll-entry.is-folded .journal-scroll-summary,
+.journal-scroll-entry.is-folded .journal-scroll-body {
+  display: none;
+}
+
+.journal-scroll-entry.is-folded {
+  padding-bottom: 0;
+  margin-bottom: var(--size-4-2, 8px);
+  border-bottom: 0;
+}
+
+/* A folded bar is a row in a list, not a sticky header. */
+.journal-scroll-entry.is-folded .journal-scroll-date {
+  position: static;
+  margin-bottom: 0;
+  border-radius: var(--radius-m, 8px);
+  box-shadow: none;
+}
+
+.journal-scroll-open {
+  display: inline-flex;
+  align-self: center;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: var(--radius-s, 4px);
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.journal-scroll-open svg {
+  width: 16px;
+  height: 16px;
+}
+
+.journal-scroll-date:hover .journal-scroll-open,
+.journal-scroll-open:focus-visible {
+  opacity: 1;
+}
+
+.journal-scroll-open:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.journal-scroll-entry.is-today .journal-scroll-open {
+  color: var(--text-on-accent);
+}
+
+/* Touch screens have no hover: keep the button visible. */
+@media (hover: none) {
+  .journal-scroll-open {
+    opacity: 0.7;
+  }
+}
+
+.is-book .journal-scroll-fold {
+  display: none;
+}
+
+/* Toolbar: fold-all is scroll-mode only; the heatmap button shows on/off state. */
+.view-action.is-hidden {
+  display: none;
+}
+
+.view-action.is-active {
+  color: var(--text-accent);
+}
+
+/* ---------------- Heatmap hide button ---------------- */
+
+.journal-heatmap-right {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2, 8px);
+}
+
+.journal-heatmap-hide {
+  padding: 2px;
+  color: var(--text-faint);
+}
+
+.journal-heatmap-hide svg {
+  width: 14px;
+  height: 14px;
+}

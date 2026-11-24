@@ -1,7 +1,7 @@
 {
   "id": "journal-scroll",
   "name": "Journal Scroll",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "minAppVersion": "1.4.0",
   "description": "Read every daily journal entry as one continuous, read-only page or as a page-by-page book, opened at today.",
   "author": "Karthik",
