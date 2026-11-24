@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = {
   journalDir: "01 - Projects/Daily Journal",
   batchSize: 10,
   viewMode: MODE_SCROLL,
+  showHeatmap: true,
 };
 
 function parseDate(name) {
@@ -218,8 +219,10 @@ class JournalScrollView extends ItemView {
     el.empty();
     el.addClass("journal-scroll-view");
     el.tabIndex = 0; // receive arrow keys in book mode
-    this.statusEl = el.createDiv({ cls: "journal-scroll-status" });
+    this.heatmapEl = el.createDiv({ cls: "journal-heatmap" });
+    // The stage scrolls in scroll mode (so the heatmap stays put above it) and pages in book mode.
     this.stageEl = el.createDiv({ cls: "journal-scroll-stage" });
+    this.statusEl = this.stageEl.createDiv({ cls: "journal-scroll-status" });
     this.viewportEl = this.stageEl.createDiv({ cls: "journal-scroll-viewport" });
     this.listEl = this.viewportEl.createDiv({ cls: "journal-scroll-list" });
 
@@ -239,7 +242,7 @@ class JournalScrollView extends ItemView {
     this.applyMode();
 
     // Scroll mode
-    this.registerDomEvent(el, "scroll", () => this.onScroll());
+    this.registerDomEvent(this.stageEl, "scroll", () => this.onScroll());
     for (const evt of ["wheel", "touchstart", "mousedown", "keydown"]) {
       this.registerDomEvent(el, evt, () => { this.pinned = false; }, { passive: true });
     }
@@ -311,7 +314,7 @@ class JournalScrollView extends ItemView {
   /** Path of the entry the reader is currently looking at. */
   currentPath() {
     if (this.mode === MODE_BOOK) return this.anchor ? this.anchor.path : null;
-    const top = this.contentEl.scrollTop + 1;
+    const top = this.stageEl.scrollTop + 1;
     for (const child of this.listEl.children) {
       if (child.offsetTop + child.offsetHeight > top) return child.dataset.path;
     }
@@ -354,13 +357,14 @@ class JournalScrollView extends ItemView {
     this.renderScope = this.addChild(new Component());
     this.listEl.empty();
     setCssVars(this.contentEl, { "--journal-book-x": "0px" });
-    this.contentEl.scrollTop = 0;
+    this.stageEl.scrollTop = 0;
     this.targetEl = null;
     this.book = null;
     this.anchor = null;
     this.spread = 0;
     this.bookLoading = null;
     this.loading = false;
+    this.renderHeatmap();
 
     if (!entries.length) {
       this.setMessage(`No DD-MM-YYYY journal files found in "${dir}".`);
@@ -500,10 +504,100 @@ class JournalScrollView extends ItemView {
 
   async onModify(file) {
     if (!(file instanceof TFile) || !this.listEl) return;
+    if (this.byPath.has(file.path)) this.renderHeatmap();
     const wrap = Array.from(this.listEl.children).find((c) => c.dataset.path === file.path);
     if (!wrap) return;
     const body = wrap.querySelector(".journal-scroll-body");
     if (body) await this.renderBody(file, body);
+  }
+
+  /* ---------------- activity heatmap ---------------- */
+  /*
+   * GitHub-style grid of the last 53 weeks (Sunday-first columns). Grey = no
+   * entry; four greens by note size, split at the quartiles of the year's sizes
+   * so the scale follows how much you usually write. Click a day to jump to it.
+   */
+
+  renderHeatmap() {
+    const root = this.heatmapEl;
+    if (!root) return;
+    root.empty();
+    root.toggleClass("is-hidden", !this.plugin.settings.showHeatmap || !this.dir);
+    if (!this.plugin.settings.showHeatmap || !this.dir) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - start.getDay() - 52 * 7); // Sunday, 52 weeks before this week
+    const startKey = dayKey(start);
+
+    // Sum sizes per day (a day may have several files); remember a file to jump to.
+    const days = new Map();
+    for (const e of this.entries) {
+      const k = dayKey(e.date);
+      if (k < startKey || k > dayKey(today)) continue;
+      const d = days.get(k) || { size: 0, path: e.file.path };
+      d.size += e.file.stat.size;
+      days.set(k, d);
+    }
+    const sizes = Array.from(days.values(), (d) => d.size).sort((a, b) => a - b);
+    const q = (f) => sizes[Math.min(sizes.length - 1, Math.floor(f * sizes.length))];
+    const cuts = sizes.length ? [q(0.25), q(0.5), q(0.75)] : [];
+    const level = (size) => 1 + cuts.filter((c) => size > c).length;
+
+    const head = root.createDiv({ cls: "journal-heatmap-head" });
+    head.createSpan({
+      cls: "journal-heatmap-title",
+      text: `${days.size} ${days.size === 1 ? "entry" : "entries"} in the last year`,
+    });
+    const legend = head.createDiv({ cls: "journal-heatmap-legend" });
+    legend.createSpan({ text: "Less" });
+    for (let l = 0; l <= 4; l++) legend.createSpan({ cls: `journal-heatmap-cell is-level-${l}` });
+    legend.createSpan({ text: "More" });
+
+    const body = root.createDiv({ cls: "journal-heatmap-body" });
+    body.createDiv({ cls: "journal-heatmap-corner" });
+    const months = body.createDiv({ cls: "journal-heatmap-months" });
+    const weekdays = body.createDiv({ cls: "journal-heatmap-weekdays" });
+    ["", "Mon", "", "Wed", "", "Fri", ""].forEach((t) => weekdays.createSpan({ text: t }));
+    const grid = body.createDiv({ cls: "journal-heatmap-grid" });
+
+    const d = new Date(start);
+    let lastMonth = -1;
+    for (let week = 0; week < 53; week++) {
+      // Label a month in the first column whose week contains its 1st (or the first column).
+      const weekEnd = new Date(d);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const m = week === 0 ? d.getMonth() : weekEnd.getMonth();
+      // Skip the first column's label when the next month starts within two weeks (labels would collide).
+      const first = week === 0 ? d.getDate() <= 17 : weekEnd.getDate() <= 7;
+      if (m !== lastMonth && first && week < 51) {
+        const label = months.createSpan({ text: MONTHS[m] });
+        setCssVars(label, { "--journal-heatmap-col": String(week + 1) });
+        lastMonth = m;
+      }
+      for (let wd = 0; wd < 7; wd++) {
+        const k = dayKey(d);
+        const cell = grid.createDiv({ cls: "journal-heatmap-cell" });
+        if (d > today) {
+          cell.addClass("is-future");
+        } else {
+          const day = days.get(k);
+          cell.addClass(`is-level-${day ? level(day.size) : 0}`);
+          if (k === dayKey(today)) cell.addClass("is-today");
+          const words = day ? Math.max(1, Math.round(day.size / 6)) : 0;
+          const label = `${WEEKDAYS[d.getDay()].slice(0, 3)}, ${fmtDate(d)} · `
+            + (day ? `about ${words.toLocaleString()} words` : "no entry");
+          cell.setAttr("aria-label", label);
+          if (day) {
+            cell.addClass("has-entry");
+            cell.addEventListener("click", () => this.build(this.dir, day.path));
+          }
+        }
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    root.scrollLeft = root.scrollWidth; // show the most recent weeks on narrow panes
   }
 
   /* ---------------- scroll mode ---------------- */
@@ -526,7 +620,7 @@ class JournalScrollView extends ItemView {
 
   scrollToTarget() {
     if (!this.targetEl || this.mode !== MODE_SCROLL) return;
-    const el = this.contentEl;
+    const el = this.stageEl;
     if (this.alignTop) {
       el.scrollTop = this.targetEl.offsetTop;
     } else {
@@ -546,7 +640,7 @@ class JournalScrollView extends ItemView {
 
   onScroll() {
     if (this.mode !== MODE_SCROLL || this.loading || !this.entries.length) return;
-    const el = this.contentEl;
+    const el = this.stageEl;
     if (this.firstLoaded > 0 && el.scrollTop <= 600) this.loadOlder();
     else if (this.lastLoaded < this.entries.length
       && el.scrollTop + el.clientHeight >= el.scrollHeight - 600) this.loadNewer();
@@ -564,7 +658,7 @@ class JournalScrollView extends ItemView {
     const anchor = this.listEl.firstElementChild;
     const before = anchor ? anchor.getBoundingClientRect().top : 0;
     this.listEl.prepend(...els);
-    if (anchor) this.contentEl.scrollTop += anchor.getBoundingClientRect().top - before;
+    if (anchor) this.stageEl.scrollTop += anchor.getBoundingClientRect().top - before;
 
     this.firstLoaded = from;
     this.updateStatus();
@@ -848,6 +942,12 @@ class JournalScrollPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  refreshHeatmaps() {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+      if (leaf.view instanceof JournalScrollView) leaf.view.renderHeatmap();
+    }
+  }
+
   async setViewMode(mode) {
     this.settings.viewMode = mode;
     await this.saveSettings();
@@ -909,6 +1009,18 @@ class JournalScrollSettingTab extends PluginSettingTab {
         .addOption(MODE_BOOK, "Book (page by page)")
         .setValue(this.plugin.settings.viewMode)
         .onChange((v) => this.plugin.setViewMode(v)));
+
+    new Setting(containerEl)
+      .setName("Show activity heatmap")
+      .setDesc("A year of journaling above the entries, like a GitHub contribution graph: grey for days "
+        + "without an entry, greener for longer entries. Click a day to jump to it.")
+      .addToggle((t) => t
+        .setValue(this.plugin.settings.showHeatmap)
+        .onChange(async (v) => {
+          this.plugin.settings.showHeatmap = v;
+          await this.plugin.saveSettings();
+          this.plugin.refreshHeatmaps();
+        }));
 
     new Setting(containerEl)
       .setName("Journal directory")

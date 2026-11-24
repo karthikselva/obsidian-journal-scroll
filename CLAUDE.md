@@ -24,7 +24,8 @@ Makes a daily journal read like a book: every `DD-MM-YYYY - Journal.md` entry is
 - **`JournalScrollPlugin`** — loads settings, registers the view (`VIEW_TYPE = "journal-scroll-view"`) and hover-link source, ribbon icon `book-open`, commands `open` ("Open journal (scrolled to today)") and `open-choose-dir`, and the settings tab. `open()` opens the saved `journalDir` directly and prompts only if it's missing or not a folder (the `askOnOpen` setting was retired and is deleted from loaded data). `applyJournalDir()` rebuilds open views when the settings field is committed. `openDir` saves the chosen dir and reuses an existing Journal Scroll leaf or opens a new tab.
 - **`FolderPromptModal`** (`SuggestModal`) — fuzzy-ish folder picker over all vault folders, prefilled with the last dir.
 - **`JournalScrollView`** (`ItemView`) — the reader. Two modes, `MODE_SCROLL` / `MODE_BOOK`, from the global setting `viewMode` (`plugin.setViewMode` saves it and calls `view.setMode` on every open view; toolbar action, command `toggle-view-mode` and settings dropdown all go through it). `setMode` rebuilds focused on `currentPath()` so switching keeps your place.
-  - DOM: `contentEl.journal-scroll-view` (`.is-book` in book mode) > `statusEl`, `stageEl` > `viewportEl` > `listEl` (entries), `navEl` (book prev/label/next).
+  - DOM: `contentEl.journal-scroll-view` (fixed flex column, never scrolls; `.is-book` in book mode) > `heatmapEl`, `stageEl` (**the scroller** in scroll mode, `position: relative` so entry `offsetTop`s are relative to it; paged in book mode) > `statusEl` + `viewportEl` > `listEl` (entries), then `navEl` (book prev/label/next). All scroll-mode code uses `stageEl.scrollTop`.
+  - Heatmap: `renderHeatmap()` (on build, on modify of a journal file, on the `showHeatmap` setting via `plugin.refreshHeatmaps()`). 53 Sunday-first week columns ending this week; per-day size = sum of `file.stat.size`; levels 1–4 split at the 25/50/75% quantiles of the year's sizes, level 0 grey. Cell tooltip via `aria-label` (date + ≈ words = bytes/6); clicking a day with an entry calls `build(dir, path)`. Month labels positioned with `--journal-heatmap-col`. Colours are `--journal-heat-0..4` (GitHub palette, `.theme-dark` override). Min width 440px with horizontal scroll, scrolled to the latest weeks.
   - State is `{ dir }` (`getState`/`setState`), so the view survives workspace reloads.
   - `build(dir, focusPath?)`: collects entries (oldest first), picks the target = `focusPath`, else today or latest entry ≤ today, resets layout, then `buildScroll` or `buildBook`. `firstLoaded`/`lastLoaded` bound the rendered window in both modes.
   - `buildId` guards against stale async renders; every async path checks `id !== this.buildId`.
@@ -36,7 +37,7 @@ Makes a daily journal read like a book: every `DD-MM-YYYY - Journal.md` entry is
   - `vault.on("modify")` re-renders only already-rendered entries. New/deleted files are **not** picked up until rebuild ("Jump to today" toolbar action rebuilds).
   - Toolbar actions: change directory (`folder-open`), jump to today (`calendar-check`).
   - Status line at top: "Scroll up for older entries · X of N loaded" or "Beginning of journal · <date> · N entries".
-- **`JournalScrollSettingTab`** — `viewMode` (dropdown, default scroll), `journalDir` (text; applied to open views on blur/Enter), `batchSize` (slider 3–50, default 10).
+- **`JournalScrollSettingTab`** — `viewMode` (dropdown, default scroll), `showHeatmap` (toggle, default on), `journalDir` (text; applied to open views on blur/Enter), `batchSize` (slider 3–50, default 10).
 
 ## Styling (`styles.css`)
 

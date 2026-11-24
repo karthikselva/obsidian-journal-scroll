@@ -1,12 +1,23 @@
 /*
- * Obsidian gives every .view-content top padding, and a sticky element sticks
- * inside its scroll container's padding — that was the gap above the pinned
- * date. The attribute selector out-ranks Obsidian's own rule.
+ * The view is a fixed column: heatmap on top, then the stage. In scroll mode
+ * the stage is the scroller, so the heatmap stays in place. Obsidian gives
+ * every .view-content padding; the attribute selector out-ranks that rule.
+ * (Top padding on the scroller would also leave a gap above the sticky date.)
  */
 .workspace-leaf-content[data-type="journal-scroll-view"] .view-content.journal-scroll-view {
-  position: relative;
-  padding: 0 var(--size-4-6, 24px) var(--size-4-12, 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
   outline: none;
+}
+
+.journal-scroll-stage {
+  position: relative; /* offsetParent for entries */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--size-4-6, 24px) var(--size-4-12, 48px);
 }
 
 .journal-scroll-list {
@@ -183,21 +194,13 @@
   display: none;
 }
 
-.workspace-leaf-content[data-type="journal-scroll-view"] .view-content.journal-scroll-view.is-book {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
-}
-
 .is-book .journal-scroll-status {
   display: none;
 }
 
 .is-book .journal-scroll-stage {
-  flex: 1 1 auto;
-  min-height: 0;
   overflow: hidden;
+  padding: 0;
 }
 
 .is-book .journal-scroll-viewport {
@@ -295,4 +298,149 @@
 .journal-book-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* ---------------- Activity heatmap ---------------- */
+
+.journal-heatmap {
+  --journal-heat-0: var(--background-modifier-border);
+  --journal-heat-1: #9be9a8;
+  --journal-heat-2: #40c463;
+  --journal-heat-3: #30a14e;
+  --journal-heat-4: #216e39;
+  flex: 0 0 auto;
+  padding: var(--size-4-2, 8px) var(--size-4-4, 16px) var(--size-4-3, 12px);
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  overflow-x: auto; /* narrow panes scroll the grid sideways; it opens at the latest weeks */
+}
+
+.theme-dark .journal-heatmap {
+  --journal-heat-1: #0e4429;
+  --journal-heat-2: #006d32;
+  --journal-heat-3: #26a641;
+  --journal-heat-4: #39d353;
+}
+
+.journal-heatmap.is-hidden {
+  display: none;
+}
+
+.journal-heatmap-head,
+.journal-heatmap-body {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.journal-heatmap-head {
+  position: sticky;
+  left: 0;
+}
+
+.journal-heatmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-3, 12px);
+  margin-bottom: var(--size-4-1, 4px);
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-muted);
+}
+
+.journal-heatmap-title {
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+.journal-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.journal-heatmap-legend .journal-heatmap-cell {
+  width: 10px;
+  height: 10px;
+}
+
+.journal-heatmap-legend span:first-child {
+  margin-right: 3px;
+}
+
+.journal-heatmap-legend span:last-child {
+  margin-left: 3px;
+}
+
+/* Grid: weekday labels | 53 week columns; month labels above. Cells scale with the pane. */
+.journal-heatmap-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0 4px;
+  min-width: 440px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--text-faint);
+}
+
+.journal-heatmap-months {
+  display: grid;
+  grid-template-columns: repeat(53, 1fr);
+  gap: 2px;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+
+.journal-heatmap-months span {
+  grid-column: var(--journal-heatmap-col) / span 3;
+  grid-row: 1;
+}
+
+.journal-heatmap-weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.journal-heatmap-weekdays span {
+  display: flex;
+  align-items: center;
+}
+
+.journal-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(53, 1fr);
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  gap: 2px;
+}
+
+.journal-heatmap-cell {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--journal-heat-0);
+}
+
+.journal-heatmap-cell.is-level-1 { background: var(--journal-heat-1); }
+.journal-heatmap-cell.is-level-2 { background: var(--journal-heat-2); }
+.journal-heatmap-cell.is-level-3 { background: var(--journal-heat-3); }
+.journal-heatmap-cell.is-level-4 { background: var(--journal-heat-4); }
+
+.journal-heatmap-cell.is-future {
+  visibility: hidden;
+}
+
+.journal-heatmap-cell.is-today {
+  outline: 1px solid var(--text-muted);
+  outline-offset: 1px;
+}
+
+.journal-heatmap-cell.has-entry {
+  cursor: pointer;
+}
+
+.journal-heatmap-cell.has-entry:hover {
+  outline: 1px solid var(--text-normal);
+  outline-offset: 1px;
 }
