@@ -447,22 +447,27 @@
 
 /* ---------------- Title and highlights (frontmatter) ---------------- */
 
-/* The title rides in the date bar after the weekday; long titles end in an ellipsis. */
+/* The title gets its own line inside the date bar, below the date and weekday, shown in full. */
+.journal-scroll-date {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
 .journal-scroll-heading-title {
-  flex: 1 1 auto;
+  order: 10; /* after the note icon, so it starts a new row */
+  flex: 1 0 100%;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.72em;
+  padding-left: calc(16px + var(--size-4-3, 12px)); /* line up with the date, past the fold chevron */
+  font-size: 0.68em;
   font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
   color: var(--text-normal);
 }
 
-.journal-scroll-heading-title::before {
-  content: "·";
-  margin-right: var(--size-4-3, 12px);
-  color: var(--text-faint);
+.is-book .journal-scroll-heading-title {
+  padding-left: 0; /* no chevron in book view */
 }
 
 .journal-scroll-heading-title.is-hidden,
@@ -470,8 +475,7 @@
   display: none;
 }
 
-.journal-scroll-entry.is-today .journal-scroll-heading-title,
-.journal-scroll-entry.is-today .journal-scroll-heading-title::before {
+.journal-scroll-entry.is-today .journal-scroll-heading-title {
   color: var(--text-on-accent);
 }
 
