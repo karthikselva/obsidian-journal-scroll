@@ -37,7 +37,8 @@ Makes a daily journal read like a book: every `DD-MM-YYYY - Journal.md` entry is
   - `vault.on("modify")` re-renders only already-rendered entries. New/deleted files are **not** picked up until rebuild ("Jump to today" toolbar action rebuilds).
   - Toolbar actions: change directory (`folder-open`), jump to today (`calendar-check`).
   - Status line at top: "Scroll up for older entries · X of N loaded" or "Beginning of journal · <date> · N entries".
-- **`JournalScrollSettingTab`** — `viewMode` (dropdown, default scroll), `showHeatmap` (toggle, default on), `journalDir` (text; applied to open views on blur/Enter), `batchSize` (slider 3–50, default 10).
+  - Title/highlights: `renderSummary()` fills `.journal-scroll-summary` (above the date `h2`) from frontmatter `title` (string) and `highlights` (list or string). The `metadataCache` `changed` handler `onMetaChanged` re-renders the summary **and** the body, because the body render on `modify` can run before new frontmatter is parsed and would show the YAML. Companion plugin `journal-scroll-assistant` writes these fields; keep the field names stable.
+- **`JournalScrollSettingTab`** — `viewMode` (dropdown, default scroll), `showHeatmap` (toggle, default on), `showSummary` (toggle, default on), `journalDir` (text; applied to open views on blur/Enter), `batchSize` (slider 3–50, default 10).
 
 ## Styling (`styles.css`)
 

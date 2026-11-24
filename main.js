@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   batchSize: 10,
   viewMode: MODE_SCROLL,
   showHeatmap: true,
+  showSummary: true,
 };
 
 function parseDate(name) {
@@ -282,6 +283,8 @@ class JournalScrollView extends ItemView {
 
     // Keep rendered entries fresh; new/deleted files need a rebuild (toolbar button).
     this.registerEvent(this.app.vault.on("modify", (file) => this.onModify(file)));
+    // Frontmatter (title, highlights) is parsed after "modify" fires, so re-render once it is.
+    this.registerEvent(this.app.metadataCache.on("changed", (file) => this.onMetaChanged(file)));
 
     if (!this.dir) this.setMessage("Choose a journal directory to begin.");
   }
@@ -401,6 +404,9 @@ class JournalScrollView extends ItemView {
     wrap.dataset.path = file.path;
     if (dayKey(date) === dayKey(new Date())) wrap.addClass("is-today");
 
+    const summary = wrap.createDiv({ cls: "journal-scroll-summary" });
+    this.renderSummary(file, summary);
+
     const h = wrap.createEl("h2", { cls: "journal-scroll-date" });
     h.createSpan({ cls: "journal-scroll-day", text: fmtDate(date) });
     h.createSpan({ cls: "journal-scroll-weekday", text: WEEKDAYS[date.getDay()] });
@@ -500,6 +506,49 @@ class JournalScrollView extends ItemView {
       };
     });
     new ImageLightbox(this.app, images, Math.max(0, imgs.indexOf(img))).open();
+  }
+
+  /**
+   * Title and highlights from the entry's frontmatter (`title`, `highlights`),
+   * shown above the date heading. Written by hand or by Journal Scroll Assistant.
+   */
+  renderSummary(file, el) {
+    el.empty();
+    const cache = this.app.metadataCache.getFileCache(file);
+    const fm = (cache && cache.frontmatter) || {};
+    const title = typeof fm.title === "string" ? fm.title.trim() : "";
+    let highlights = fm.highlights;
+    if (typeof highlights === "string") highlights = [highlights];
+    highlights = Array.isArray(highlights)
+      ? highlights.filter((h) => typeof h === "string" && h.trim()) : [];
+    const show = this.plugin.settings.showSummary && (title || highlights.length);
+    el.toggleClass("is-hidden", !show);
+    if (!show) return;
+    if (title) el.createDiv({ cls: "journal-scroll-title", text: title });
+    if (highlights.length) {
+      const ul = el.createEl("ul", { cls: "journal-scroll-highlights" });
+      for (const h of highlights) ul.createEl("li", { text: h.trim() });
+    }
+  }
+
+  async onMetaChanged(file) {
+    if (!(file instanceof TFile) || !this.listEl) return;
+    const wrap = Array.from(this.listEl.children).find((c) => c.dataset.path === file.path);
+    if (!wrap) return;
+    const summary = wrap.querySelector(".journal-scroll-summary");
+    if (summary) this.renderSummary(file, summary);
+    // The body render on "modify" may have used stale frontmatter bounds.
+    const body = wrap.querySelector(".journal-scroll-body");
+    if (body) await this.renderBody(file, body);
+  }
+
+  refreshSummaries() {
+    if (!this.listEl) return;
+    for (const wrap of Array.from(this.listEl.children)) {
+      const file = this.app.vault.getAbstractFileByPath(wrap.dataset.path || "");
+      const summary = wrap.querySelector(".journal-scroll-summary");
+      if (file instanceof TFile && summary) this.renderSummary(file, summary);
+    }
   }
 
   async onModify(file) {
@@ -948,6 +997,12 @@ class JournalScrollPlugin extends Plugin {
     }
   }
 
+  refreshSummaries() {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+      if (leaf.view instanceof JournalScrollView) leaf.view.refreshSummaries();
+    }
+  }
+
   async setViewMode(mode) {
     this.settings.viewMode = mode;
     await this.saveSettings();
@@ -1020,6 +1075,18 @@ class JournalScrollSettingTab extends PluginSettingTab {
           this.plugin.settings.showHeatmap = v;
           await this.plugin.saveSettings();
           this.plugin.refreshHeatmaps();
+        }));
+
+    new Setting(containerEl)
+      .setName("Show titles and highlights")
+      .setDesc("Show an entry's title and highlights above its date, read from the note's frontmatter "
+        + "(title: and highlights:).")
+      .addToggle((t) => t
+        .setValue(this.plugin.settings.showSummary)
+        .onChange(async (v) => {
+          this.plugin.settings.showSummary = v;
+          await this.plugin.saveSettings();
+          this.plugin.refreshSummaries();
         }));
 
     new Setting(containerEl)

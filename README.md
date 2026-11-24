@@ -6,6 +6,7 @@ An Obsidian plugin that shows all your daily journal entries on one continuous, 
 
 - Asks once which folder holds your journal (searched recursively), then always opens straight into it. Change the folder later in settings or with the folder button in the view.
 - An activity heatmap at the top shows the last year like a GitHub contribution graph. Days without an entry are grey, and longer entries are a deeper green. Hover a day to see its date and length, or click it to jump to that entry. You can turn it off in settings.
+- If an entry's frontmatter has a `title:` or `highlights:`, they appear above its date. Write them by hand, or let [Journal Scroll Assistant](https://github.com/karthikselva/obsidian-journal-scroll-assistant) generate them. You can turn this off in settings.
 - Expects files named `DD-MM-YYYY - Journal.md`, e.g. `Daily Journal/2026/11 (Nov) 2026/23-11-2026 - Journal.md`.
 - Two reading modes, switched from the toolbar, the command palette (*Toggle infinite scroll / book view*) or settings:
   - **Infinite scroll** opens at the end of today's entry, or at the most recent entry before today if today has none. Older and newer entries load in batches as you scroll. Each date heading stays pinned at the top of the view.
