@@ -447,14 +447,19 @@
 
 /* ---------------- Title and highlights (frontmatter) ---------------- */
 
-/* The title gets its own line inside the date bar, below the date and weekday, shown in full. */
+/*
+ * The date bar is three lines:
+ *   1. chevron · date · weekday ........................ (note icon)
+ *   2. life-area tags
+ *   3. title, shown in full
+ * Tags and title take a full-width flex item each, so each starts its own row.
+ */
 .journal-scroll-date {
   flex-wrap: wrap;
-  row-gap: 2px;
+  row-gap: 4px;
 }
 
 .journal-scroll-heading-title {
-  order: 10; /* after the note icon, so it starts a new row */
   flex: 1 0 100%;
   min-width: 0;
   padding-left: calc(16px + var(--size-4-3, 12px)); /* line up with the date, past the fold chevron */
@@ -466,8 +471,11 @@
   color: var(--text-normal);
 }
 
-.is-book .journal-scroll-heading-title {
-  padding-left: 0; /* no chevron in book view */
+.is-book .journal-scroll-heading-title,
+.is-book .journal-scroll-focus,
+.is-grid .journal-scroll-heading-title,
+.is-grid .journal-scroll-focus {
+  padding-left: 0; /* no chevron in book or grid view */
 }
 
 .journal-scroll-heading-title.is-hidden,
@@ -609,24 +617,19 @@
 
 /* ---------------- Life-area tags on the date bar ---------------- */
 
-/* Right side of the first row: date · weekday ......... [Family] [Career] (note icon) */
+/* Second line of the date bar, left-aligned under the date: [Family ▂▄▆] [Career ▂▄_] ... */
 .journal-scroll-focus {
-  display: inline-flex;
+  display: flex;
+  flex: 1 0 100%;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  align-self: center;
+  justify-content: flex-start;
   gap: 4px;
-  margin-left: auto;
   min-width: 0;
+  padding-left: calc(16px + var(--size-4-3, 12px)); /* line up with the date, past the fold chevron */
 }
 
 .journal-scroll-focus.is-hidden {
   display: none;
-}
-
-/* With tags present they take the free space; the note icon sits right after them. */
-.journal-scroll-focus:not(.is-hidden) + .journal-scroll-open {
-  margin-left: 4px;
 }
 
 .journal-scroll-focus-tag {
@@ -684,4 +687,252 @@
   --tag-color: var(--text-faint);
   color: var(--text-muted);
   font-weight: 500;
+}
+
+/* ---------------- Grid view (scroll mode) ---------------- */
+/*
+ * Each day is a card: first photo, the three-line date bar, then highlights.
+ * Cards in a row share a height; the body is not rendered.
+ */
+.is-grid .journal-scroll-list {
+  max-width: 1240px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--size-4-4, 16px);
+  padding-top: var(--size-4-2, 8px);
+}
+
+.is-grid .journal-scroll-entry {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l, 12px);
+  background: var(--background-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.is-grid .journal-scroll-entry:hover {
+  transform: translateY(-2px);
+  border-color: var(--interactive-accent);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.3);
+}
+
+.is-grid .journal-scroll-entry.is-today {
+  border-color: var(--interactive-accent);
+}
+
+.journal-scroll-cover {
+  flex: 0 0 auto;
+  height: 150px;
+  background: var(--background-secondary);
+}
+
+.journal-scroll-cover.is-hidden {
+  display: none;
+}
+
+.journal-scroll-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* In a card the date bar is the card's heading, not a sticky bar. */
+.is-grid .journal-scroll-date {
+  position: static;
+  margin: 0;
+  padding: var(--size-4-2, 8px) var(--size-4-3, 12px);
+  font-size: 1.15em;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.is-grid .journal-scroll-fold {
+  display: none;
+}
+
+.is-grid .journal-scroll-summary {
+  margin: var(--size-4-3, 12px);
+}
+
+/* Keep cards compact: at most four highlights. */
+.is-grid .journal-scroll-highlights li:nth-child(n + 5) {
+  display: none;
+}
+
+.is-grid .journal-scroll-highlights {
+  font-size: 0.85em;
+}
+
+/* ---------------- Day pop-up (grid view) ---------------- */
+/*
+ * The date bar is flush with the pop-up's top edge: no modal padding, no gap,
+ * and Obsidian's (empty) modal header is removed. The modal's rounded corners
+ * clip the bar, so it reads as the pop-up's own title bar.
+ */
+.modal.journal-scroll-day-modal {
+  --journal-modal-pad: var(--size-4-6, 24px);
+  --journal-modal-close: 32px;
+  width: min(820px, 94vw);
+  max-width: 94vw;
+  max-height: 88vh;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.journal-scroll-day-modal .modal-header,
+.journal-scroll-day-modal .modal-title:empty {
+  display: none;
+}
+
+.journal-scroll-day-modal .modal-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+  padding: 0 var(--journal-modal-pad) var(--journal-modal-pad);
+}
+
+.journal-scroll-day-modal .journal-scroll-entry {
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
+}
+
+/* The title bar: edge to edge, pinned at the top while the day scrolls under it. */
+.journal-scroll-day-modal .journal-scroll-date {
+  top: 0;
+  margin: 0 calc(-1 * var(--journal-modal-pad)) var(--size-4-4, 16px);
+  padding: var(--size-4-4, 16px) calc(var(--journal-modal-pad) + var(--journal-modal-close) + 8px)
+    var(--size-4-3, 12px) var(--journal-modal-pad);
+  border-radius: 0;
+  box-shadow: 0 3px 8px -6px rgba(0, 0, 0, 0.3);
+  cursor: default;
+}
+
+/* Nothing to fold in the pop-up, so no chevron and no indent for it. */
+.journal-scroll-day-modal .journal-scroll-fold {
+  display: none;
+}
+
+.journal-scroll-day-modal .journal-scroll-heading-title,
+.journal-scroll-day-modal .journal-scroll-focus {
+  padding-left: 0;
+}
+
+.journal-scroll-day-modal .journal-scroll-open {
+  opacity: 0.7;
+}
+
+/* Close: a red round button in the title bar's top-right corner, above the sticky bar. */
+.journal-scroll-day-modal .modal-close-button {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--journal-modal-close);
+  height: var(--journal-modal-close);
+  padding: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--color-red, #e5534b);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  opacity: 1;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+/* The icon comes from main.js (setIcon "x"); hide Obsidian's own glyph so there is only one. */
+.journal-scroll-day-modal .modal-close-button::before {
+  display: none;
+}
+
+.journal-scroll-day-modal .modal-close-button svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 3px;
+  color: #fff;
+}
+
+.journal-scroll-day-modal .modal-close-button:hover {
+  transform: scale(1.08);
+  background: color-mix(in srgb, var(--color-red, #e5534b) 82%, #000);
+}
+
+.journal-scroll-day-modal .modal-close-button:focus-visible {
+  outline: 2px solid var(--text-on-accent, #fff);
+  outline-offset: 2px;
+}
+
+/* ---------------- Action row (end of each day) ---------------- */
+/* Chat · Compare · Regenerate · Summarize — quiet ghost buttons that only light up on hover. */
+.journal-scroll-actions {
+  clear: both;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: var(--size-4-3, 12px);
+  padding-top: var(--size-4-2, 8px);
+  border-top: 1px dashed var(--background-modifier-border);
+}
+
+.journal-scroll-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: auto;
+  padding: 3px 8px;
+  font-size: var(--font-ui-smaller, 12px);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-m, 8px);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.journal-scroll-action:hover,
+.journal-scroll-action:focus-visible {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border);
+}
+
+.journal-scroll-action-icon,
+.journal-scroll-action-caret {
+  display: inline-flex;
+}
+
+.journal-scroll-action-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.journal-scroll-action-caret svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.6;
+}
+
+.journal-scroll-entry.is-folded .journal-scroll-actions {
+  display: none;
+}
+
+/* Keep the row on one page in book view rather than splitting it across columns. */
+.is-book .journal-scroll-actions {
+  break-inside: avoid;
 }

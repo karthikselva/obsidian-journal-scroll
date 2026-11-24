@@ -20,17 +20,25 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|tiff?)$/i;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// Covers in grid cards: formats a browser can actually draw (no HEIC/TIFF).
+const COVER_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i;
+
 const MODE_SCROLL = "scroll";
 const MODE_BOOK = "book";
+
+// Scroll-mode layouts: one column of full entries, or a grid of cards.
+const LAYOUT_LIST = "list";
+const LAYOUT_GRID = "grid";
 
 const DEFAULT_SETTINGS = {
   journalDir: "01 - Projects/Daily Journal",
   batchSize: 10,
   viewMode: MODE_SCROLL,
+  layout: LAYOUT_LIST,
   showHeatmap: true,
   showSummary: true,
   foldEntries: false,  // scroll mode: start each entry folded to its date bar
-  showFocus: true,     // life-area tags (frontmatter focus:) on the right of the date bar
+  showFocus: true,     // life-area tags (frontmatter focus:) on their own line in the date bar
 };
 
 function parseDate(name) {
@@ -171,6 +179,57 @@ class ImageLightbox extends Modal {
 }
 
 /* ------------------------------------------------------------------ */
+/* Day pop-up (grid view)                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One day in full, over the card grid. Esc, the close button or a click outside
+ * dismisses it and the grid is exactly where it was. Links open in a tab and close
+ * the pop-up; photos open the lightbox on top of it.
+ */
+class DayModal extends Modal {
+  constructor(view, entry) {
+    super(view.app);
+    this.view = view;
+    this.entry = entry;
+  }
+
+  async onOpen() {
+    this.modalEl.addClass("journal-scroll-day-modal");
+    // Our own X icon in the red close button (styles.css hides Obsidian's glyph), so it is the same on every build.
+    const closeBtn = this.modalEl.querySelector(".modal-close-button");
+    if (closeBtn) {
+      closeBtn.empty();
+      setIcon(closeBtn, "x");
+      closeBtn.setAttr("aria-label", "Close");
+    }
+    // Owns the rendered markdown (embeds, child components); unloaded on close.
+    const component = this.component = new Component();
+    component.load();
+    const wrap = await this.view.renderEntry(this.entry, {
+      full: true,
+      component,
+      onOpenNote: () => this.close(),
+    });
+    if (this.component !== component) return; // closed while rendering
+    this.contentEl.append(wrap);
+
+    this.contentEl.addEventListener("click", (evt) => {
+      const isLink = !!this.view.linkFromEvent(evt);
+      this.view.onClick(evt);
+      if (isLink) this.close();
+    });
+    this.contentEl.addEventListener("mouseover", (evt) => this.view.onHover(evt));
+  }
+
+  onClose() {
+    if (this.component) this.component.unload();
+    this.component = null;
+    this.contentEl.empty();
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* The view                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -179,6 +238,7 @@ class JournalScrollView extends ItemView {
     super(leaf);
     this.plugin = plugin;
     this.mode = plugin.settings.viewMode;
+    this.layout = plugin.settings.layout === LAYOUT_GRID ? LAYOUT_GRID : LAYOUT_LIST;
     this.dir = null;
     this.entries = [];      // [{ file, date }], oldest first
     this.byPath = new Map();
@@ -243,6 +303,8 @@ class JournalScrollView extends ItemView {
     this.addAction("calendar-check", "Jump to today", () => this.dir && this.build(this.dir));
     this.modeAction = this.addAction("book", "", () => this.plugin.setViewMode(
       this.mode === MODE_BOOK ? MODE_SCROLL : MODE_BOOK));
+    this.layoutAction = this.addAction("layout-grid", "", () => this.plugin.setLayout(
+      this.layout === LAYOUT_GRID ? LAYOUT_LIST : LAYOUT_GRID));
     this.foldAction = this.addAction("fold-vertical", "", () => this.plugin.setFoldEntries(
       !this.plugin.settings.foldEntries));
     this.heatmapAction = this.addAction("calendar-range", "", () => this.plugin.setShowHeatmap(
@@ -310,7 +372,13 @@ class JournalScrollView extends ItemView {
     if (this.foldAction) {
       setIcon(this.foldAction, s.foldEntries ? "unfold-vertical" : "fold-vertical");
       this.foldAction.setAttr("aria-label", s.foldEntries ? "Expand all entries" : "Fold all entries");
-      this.foldAction.toggleClass("is-hidden", this.mode === MODE_BOOK);
+      this.foldAction.toggleClass("is-hidden", this.mode === MODE_BOOK || this.isGrid());
+    }
+    if (this.layoutAction) {
+      const grid = this.layout === LAYOUT_GRID;
+      setIcon(this.layoutAction, grid ? "list" : "layout-grid");
+      this.layoutAction.setAttr("aria-label", grid ? "Switch to list view" : "Switch to grid view");
+      this.layoutAction.toggleClass("is-hidden", this.mode === MODE_BOOK);
     }
     if (this.heatmapAction) {
       this.heatmapAction.setAttr("aria-label", s.showHeatmap ? "Hide activity heatmap" : "Show activity heatmap");
@@ -321,6 +389,7 @@ class JournalScrollView extends ItemView {
   applyMode() {
     const book = this.mode === MODE_BOOK;
     this.contentEl.toggleClass("is-book", book);
+    this.contentEl.toggleClass("is-grid", this.isGrid());
     this.updateActions();
     if (this.modeAction) {
       setIcon(this.modeAction, book ? "scroll-text" : "book");
@@ -334,6 +403,26 @@ class JournalScrollView extends ItemView {
     this.mode = mode;
     this.applyMode();
     if (this.dir) this.build(this.dir, focus);
+  }
+
+  /** Grid cards only exist in scroll mode; book view is always full pages. */
+  isGrid() {
+    return this.mode === MODE_SCROLL && this.layout === LAYOUT_GRID;
+  }
+
+  /** Switch list <-> grid, keeping the reader on `focus` (default: the entry in view). */
+  setLayout(layout, focus) {
+    if (layout === this.layout) return;
+    if (!focus) focus = this.currentPath();
+    this.layout = layout;
+    this.applyMode();
+    if (this.dir) this.build(this.dir, focus);
+  }
+
+  /** A grid card was clicked: read that day in full in a pop-up over the grid. */
+  openDay(path) {
+    const entry = this.byPath.get(path);
+    if (entry) new DayModal(this, entry).open();
   }
 
   /** Path of the entry the reader is currently looking at. */
@@ -420,43 +509,102 @@ class JournalScrollView extends ItemView {
     return out;
   }
 
-  async renderEntry(entry) {
+  /**
+   * opts.full: render the whole day regardless of layout or folding (the day pop-up).
+   * opts.component: owns the rendered markdown (default: this view's render scope).
+   * opts.onOpenNote: called before the note opens in a tab (the pop-up closes itself).
+   */
+  async renderEntry(entry, opts = {}) {
     const { file, date } = entry;
     const wrap = createDiv({ cls: "journal-scroll-entry" });
     wrap.dataset.path = file.path;
     if (dayKey(date) === dayKey(new Date())) wrap.addClass("is-today");
+    const grid = !opts.full && this.isGrid();
 
+    // A grid card opens with the day's first photo.
+    if (grid) wrap.createDiv({ cls: "journal-scroll-cover" });
+
+    // Three lines: date · weekday (note icon on the right) / life-area tags / title.
+    // DOM order is the reading order; styles.css breaks the tags and title onto their own rows.
     const h = wrap.createEl("h2", { cls: "journal-scroll-date" });
     setIcon(h.createSpan({ cls: "journal-scroll-fold" }), "chevron-down");
     h.createSpan({ cls: "journal-scroll-day", text: fmtDate(date) });
     h.createSpan({ cls: "journal-scroll-weekday", text: WEEKDAYS[date.getDay()] });
-    h.createSpan({ cls: "journal-scroll-heading-title" });
-    h.createSpan({ cls: "journal-scroll-focus" });
     const open = h.createSpan({ cls: "journal-scroll-open", attr: { "aria-label": `Open ${file.basename}` } });
     setIcon(open, "file-text");
-    const openNote = (evt) => this.app.workspace.getLeaf(Keymap.isModEvent(evt) || "tab").openFile(file);
+    h.createSpan({ cls: "journal-scroll-focus" });
+    h.createSpan({ cls: "journal-scroll-heading-title" });
+    const openNote = (evt) => {
+      if (opts.onOpenNote) opts.onOpenNote();
+      this.app.workspace.getLeaf(Keymap.isModEvent(evt) || "tab").openFile(file);
+    };
     open.addEventListener("click", (evt) => {
       evt.stopPropagation();
       openNote(evt);
     });
-    // Clicking the date bar folds or expands the entry (scroll mode). Ctrl/Cmd-click, the
-    // note button, and any click in book view open the note instead.
-    h.addEventListener("click", (evt) => {
-      if (this.mode === MODE_BOOK || Keymap.isModEvent(evt)) openNote(evt);
-      else this.toggleFold(wrap);
-    });
+
+    if (grid) {
+      // The whole card is the target: open the day in a pop-up; Ctrl/Cmd-click opens the note.
+      wrap.addClass("is-card");
+      wrap.addEventListener("click", (evt) => {
+        if (Keymap.isModEvent(evt)) openNote(evt);
+        else this.openDay(file.path);
+      });
+    } else if (opts.full) {
+      // In the pop-up the date bar has nothing to fold; Ctrl/Cmd-click still opens the note.
+      h.addEventListener("click", (evt) => { if (Keymap.isModEvent(evt)) openNote(evt); });
+    } else {
+      // Clicking the date bar folds or expands the entry (scroll mode). Ctrl/Cmd-click, the
+      // note button, and any click in book view open the note instead.
+      h.addEventListener("click", (evt) => {
+        if (this.mode === MODE_BOOK || Keymap.isModEvent(evt)) openNote(evt);
+        else this.toggleFold(wrap);
+      });
+    }
 
     // Highlights sit between the date bar and the entry, as a short summary of the day.
     wrap.createDiv({ cls: "journal-scroll-summary" });
     this.renderSummary(file, wrap);
 
+    // Cards stop at the highlights; skipping the body keeps a wall of cards fast.
+    if (grid) return wrap;
     const body = wrap.createDiv({ cls: "journal-scroll-body markdown-rendered" });
-    this.applyFold(wrap);
-    await this.renderBody(file, body);
+    this.renderActions(file, wrap, opts.onOpenNote);
+    if (!opts.full) this.applyFold(wrap);
+    await this.renderBody(file, body, opts.component);
     return wrap;
   }
 
-  async renderBody(file, body) {
+  /**
+   * A quiet row at the end of each day: Chat · Compare · Regenerate · Summarize. Each opens a
+   * menu from Journal Scroll Assistant, so the row only appears when that plugin is enabled.
+   */
+  renderActions(file, wrap, onStart) {
+    const assistant = this.app.plugins && this.app.plugins.plugins
+      && this.app.plugins.plugins["journal-scroll-assistant"];
+    if (!assistant || typeof assistant.openActionMenu !== "function") return;
+    const row = wrap.createDiv({ cls: "journal-scroll-actions" });
+    const ACTIONS = [
+      ["chat", "message-circle", "Chat"],
+      ["compare", "git-compare", "Compare"],
+      ["regenerate", "refresh-cw", "Regenerate"],
+      ["summarize", "scroll-text", "Summarize"],
+    ];
+    for (const [kind, icon, label] of ACTIONS) {
+      const btn = row.createEl("button", { cls: "journal-scroll-action", attr: { "aria-label": `${label}…` } });
+      setIcon(btn.createSpan({ cls: "journal-scroll-action-icon" }), icon);
+      btn.createSpan({ text: label });
+      setIcon(btn.createSpan({ cls: "journal-scroll-action-caret" }), "chevron-down");
+      btn.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        evt.preventDefault();
+        assistant.openActionMenu(kind, evt, { view: this, file, onStart, anchor: btn });
+      });
+    }
+  }
+
+  async renderBody(file, body, component) {
+    component = component || this.renderScope;
     let text = await this.app.vault.cachedRead(file);
     text = text.replace(/^﻿/, "");
     // Most entries open with a "---" section rule, which Obsidian would read as
@@ -470,9 +618,9 @@ class JournalScrollView extends ItemView {
     }
     body.empty();
     if (MarkdownRenderer.render) {
-      await MarkdownRenderer.render(this.app, text, body, file.path, this.renderScope);
+      await MarkdownRenderer.render(this.app, text, body, file.path, component);
     } else {
-      await MarkdownRenderer.renderMarkdown(text, body, file.path, this.renderScope);
+      await MarkdownRenderer.renderMarkdown(text, body, file.path, component);
     }
     body.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.disabled = true; });
     this.groupThumbnails(body);
@@ -548,6 +696,7 @@ class JournalScrollView extends ItemView {
 
   isFolded(path) {
     if (this.mode === MODE_BOOK) return false; // a book page per entry; folding would leave empty pages
+    if (this.isGrid()) return false;           // cards are already a summary
     return this.foldOverrides.has(path) ? this.foldOverrides.get(path) : !!this.plugin.settings.foldEntries;
   }
 
@@ -588,6 +737,7 @@ class JournalScrollView extends ItemView {
    */
   renderSummary(file, wrap) {
     this.renderFocus(file, wrap);
+    this.renderCover(file, wrap);
     const titleEl = wrap.querySelector(".journal-scroll-heading-title");
     const el = wrap.querySelector(".journal-scroll-summary");
     if (!titleEl || !el) return;
@@ -600,7 +750,7 @@ class JournalScrollView extends ItemView {
     highlights = on && Array.isArray(highlights)
       ? highlights.filter((h) => typeof h === "string" && h.trim()) : [];
 
-    // Title shares the date bar: "22 Nov 2026  SUNDAY  Title of the day".
+    // Title is the third line of the date bar, under the life-area tags.
     titleEl.setText(title);
     titleEl.toggleClass("is-hidden", !title);
     if (title) titleEl.setAttr("aria-label", title);
@@ -614,9 +764,28 @@ class JournalScrollView extends ItemView {
     }
   }
 
+  /** Grid cards: the first image embedded in the note, read from the metadata cache. */
+  renderCover(file, wrap) {
+    const el = wrap.querySelector(".journal-scroll-cover");
+    if (!el) return;
+    el.empty();
+    const cache = this.app.metadataCache.getFileCache(file);
+    let src = null;
+    for (const e of (cache && cache.embeds) || []) {
+      const linkpath = String(e.link || "").split("#")[0].split("|")[0];
+      const dest = linkpath && this.app.metadataCache.getFirstLinkpathDest(linkpath, file.path);
+      if (dest instanceof TFile && COVER_RE.test(dest.name)) {
+        src = this.app.vault.getResourcePath(dest);
+        break;
+      }
+    }
+    el.toggleClass("is-hidden", !src);
+    if (src) el.createEl("img", { attr: { src, alt: "", loading: "lazy", draggable: "false" } });
+  }
+
   /**
-   * Life-area tags from frontmatter `focus:` (area -> focused | some | neglected), shown on the
-   * right of the date bar: green, yellow, red. Written by Journal Scroll Assistant.
+   * Life-area tags from frontmatter `focus:` (area -> focused | some | neglected), on their own
+   * line of the date bar, under the date: green, yellow, red. Written by Journal Scroll Assistant.
    */
   renderFocus(file, wrap) {
     const el = wrap.querySelector(".journal-scroll-focus");
@@ -1101,6 +1270,11 @@ class JournalScrollPlugin extends Plugin {
       callback: () => this.setViewMode(this.settings.viewMode === MODE_BOOK ? MODE_SCROLL : MODE_BOOK),
     });
     this.addCommand({
+      id: "toggle-layout",
+      name: "Toggle list / grid view",
+      callback: () => this.setLayout(this.settings.layout === LAYOUT_GRID ? LAYOUT_LIST : LAYOUT_GRID),
+    });
+    this.addCommand({
       id: "toggle-fold-entries",
       name: "Toggle folded / expanded entries",
       callback: () => this.setFoldEntries(!this.settings.foldEntries),
@@ -1152,6 +1326,17 @@ class JournalScrollPlugin extends Plugin {
     await this.saveSettings();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       if (leaf.view instanceof JournalScrollView) leaf.view.setMode(mode);
+    }
+  }
+
+  /** List or grid, for every open journal view. `fromView` lands on `focusPath`; the others keep their place. */
+  async setLayout(layout, fromView, focusPath) {
+    this.settings.layout = layout;
+    await this.saveSettings();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+      if (leaf.view instanceof JournalScrollView) {
+        leaf.view.setLayout(layout, leaf.view === fromView ? focusPath : undefined);
+      }
     }
   }
 
@@ -1210,6 +1395,17 @@ class JournalScrollSettingTab extends PluginSettingTab {
         .onChange((v) => this.plugin.setViewMode(v)));
 
     new Setting(containerEl)
+      .setName("Layout")
+      .setDesc("For infinite scroll. List shows each day in full, one after another. Grid shows each day "
+        + "as a card with its first photo, date, life areas, title and highlights; click a card to read "
+        + "that day in a pop-up, and dismiss it to return to the cards. Also switchable from the toolbar.")
+      .addDropdown((d) => d
+        .addOption(LAYOUT_LIST, "List")
+        .addOption(LAYOUT_GRID, "Grid (cards)")
+        .setValue(this.plugin.settings.layout)
+        .onChange((v) => this.plugin.setLayout(v)));
+
+    new Setting(containerEl)
       .setName("Show activity heatmap")
       .setDesc("A year of journaling above the entries, like a GitHub contribution graph: grey for days "
         + "without an entry, greener for longer entries. Click a day to jump to it.")
@@ -1219,7 +1415,7 @@ class JournalScrollSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Show life-area tags")
-      .setDesc("Coloured tags on the right of each date bar from the note's focus: frontmatter: green for "
+      .setDesc("Coloured tags on their own line under each date, from the note's focus: frontmatter: green for "
         + "focused, yellow for some, red for neglected. Journal Scroll Assistant writes them.")
       .addToggle((t) => t
         .setValue(this.plugin.settings.showFocus)
