@@ -678,3 +678,10 @@
 .journal-scroll-focus-tag.is-red {
   --tag-color: var(--color-red, #e5534b);
 }
+
+/* Not today: neutral, all bars grey and the label muted, so it recedes instead of alarming. */
+.journal-scroll-focus-tag.is-grey {
+  --tag-color: var(--text-faint);
+  color: var(--text-muted);
+  font-weight: 500;
+}

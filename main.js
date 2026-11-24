@@ -624,19 +624,20 @@ class JournalScrollView extends ItemView {
     el.empty();
     const cache = this.app.metadataCache.getFileCache(file);
     const focus = cache && cache.frontmatter && cache.frontmatter.focus;
-    const LEVELS = { focused: "green", some: "yellow", neglected: "red" };
-    const BARS = { focused: 3, some: 2, neglected: 1 };
+    const LEVELS = { focused: "green", some: "yellow", neglected: "red", none: "grey" };
+    const BARS = { focused: 3, some: 2, neglected: 1, none: 0 };
+    const SAY = { focused: "focused", some: "some", neglected: "neglected", none: "not today" };
     const items = this.plugin.settings.showFocus && focus && typeof focus === "object" && !Array.isArray(focus)
       ? Object.entries(focus).filter(([area, level]) => area && LEVELS[String(level).toLowerCase()]) : [];
     el.toggleClass("is-hidden", !items.length);
     for (const [area, level] of items) {
       const lv = String(level).toLowerCase();
-      // A signal-strength meter: 1 bar neglected (red), 2 some (yellow), 3 focused (green).
+      // A signal-strength meter: 3 bars focused (green), 2 some (yellow), 1 neglected (red), 0 not today (grey).
       const tag = el.createSpan({ cls: `journal-scroll-focus-tag is-${LEVELS[lv]}` });
       tag.createSpan({ cls: "journal-scroll-focus-label", text: area });
       const meter = tag.createSpan({ cls: "journal-scroll-meter" });
       for (let b = 1; b <= 3; b++) meter.createSpan({ cls: b <= BARS[lv] ? "is-on" : "" });
-      tag.setAttr("aria-label", `${area}: ${lv} (${BARS[lv]} of 3)`);
+      tag.setAttr("aria-label", `${area}: ${SAY[lv]} (${BARS[lv]} of 3)`);
     }
   }
 
